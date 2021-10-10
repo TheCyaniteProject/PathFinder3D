@@ -7,17 +7,18 @@ public class AstarGrid : MonoBehaviour
     public Vector3 positionOffset;
     public LayerMask terrainMask;
     public LayerMask obsticleMask;
+    public Transform target;
     public int gridSize = 100;
     public int sampleSize = 50;
     public float colliderRadius = 0.5f;
     public float walkableUpdateTime = 0.5f;
     public float gridUpdateTime = 1f;
-
-    public Node[,] nodeGrid;
-    [Space]
-    public Transform target;
+    public float maxIncline = 5;
+    public int nonWalkableNeighborCost = 2;
     [Space]
     public bool debugView = false;
+
+    public Node[,] nodeGrid;
 
     public void Awake()
     {
@@ -45,8 +46,24 @@ public class AstarGrid : MonoBehaviour
             timer = 0;
             foreach (Node node in nodeGrid)
             {
-                if (node.grounded)
+                node.wCost = 0;
+                if (node.grounded)  // Set Node Walkable
+                {
                     node.walkable = !Physics.CheckSphere(node.position, colliderRadius, obsticleMask);
+
+                    List<Node> neighbors = Astar.GetDirectNeighbors(nodeGrid, node);
+                    foreach (Node neighbor in neighbors)
+                    {
+                        if (node.position.y - neighbor.position.y > maxIncline)
+                        {
+                            node.walkable = false;
+                        }
+                        else if (!neighbor.walkable)
+                        {
+                            node.wCost += nonWalkableNeighborCost;
+                        }
+                    }
+                }
                 else
                     node.walkable = false;
             }
@@ -76,7 +93,7 @@ public class AstarGrid : MonoBehaviour
                     (transform.position.z + positionOffset.z + ((size / samples) * y))
                 );
                 RaycastHit hit;
-                if (Physics.Raycast(nodeGrid[x, y].position, Vector3.down, out hit, positionOffset.y + 50, terrainMask))
+                if (Physics.Raycast(nodeGrid[x, y].position, Vector3.down, out hit, positionOffset.y + 50, terrainMask)) // Set Node Height
                 {
                     nodeGrid[x, y].position.y = hit.point.y;
                     nodeGrid[x, y].grounded = true;

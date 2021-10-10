@@ -9,26 +9,26 @@ public class Astar : MonoBehaviour
     public static Astar Instance;
     public int skipTime = 100;
     public int breakTime = 1000;
-    public float heightTollerence = 1; // Used for the height in path simplifying using
+    public float minHeightDifference = 1; // Used for the height in path simplifying
 
     private void Awake()
     {
         Instance = this;
     }
 
-
-    public void FindPath(PathRequest request, Action<PathResult> callback)
+    long stopWatch = 0;
+    public IEnumerator FindPath(PathRequest request, Action<PathResult> callback)
     {
-        float maxIncline = 9; // TODO
-
         Stopwatch sw = new Stopwatch();
         sw.Start();
+
+        Node[,] grid = request.grid.nodeGrid;
         Node start_node = AstarGrid.Instance.NodeFromWorldPoint(request.pathStart);
         Node target_node = AstarGrid.Instance.NodeFromWorldPoint(request.pathEnd);
 
         Vector3[] waypoints = new Vector3[0];
         bool success = false;
-
+        
 
         if (target_node.walkable || start_node.walkable)
         {
@@ -44,10 +44,15 @@ public class Astar : MonoBehaviour
 
                 if (currentNode == target_node)
                 {
-                    sw.Stop();
-                    //UnityEngine.Debug.Log($"Path found in {sw.ElapsedMilliseconds}ms");
                     success = true;
                     break;
+                }
+
+                if (sw.ElapsedMilliseconds - stopWatch > skipTime)
+                {
+                    stopWatch = sw.ElapsedMilliseconds;
+                    UnityEngine.Debug.Log(true);
+                    yield return null;
                 }
 
                 if (sw.ElapsedMilliseconds > breakTime)
@@ -55,7 +60,7 @@ public class Astar : MonoBehaviour
                     break;
                 }
 
-                foreach (Node neighbor in GetNeighbors(request.grid, currentNode))
+                foreach (Node neighbor in GetNeighbors(grid, currentNode))
                 {
                     if (closedList.Contains(neighbor) || !neighbor.walkable)
                         continue;
@@ -65,18 +70,18 @@ public class Astar : MonoBehaviour
                     {
                         neighbor.gCost = newMovementCostToNeighbor;
                         neighbor.hCost = GetDistance(neighbor, target_node);
+
+                        // Height costs
                         if (neighbor.position.y > currentNode.position.y)
                             neighbor.yCost = (int)(Mathf.Clamp(neighbor.position.y - currentNode.position.y, 0, 10) * 5);
                         else if (neighbor.position.y < currentNode.position.y)
-                            neighbor.yCost = (int)(Mathf.Clamp(currentNode.position.y - neighbor.position.y, 0, 10) * 5);
+                            neighbor.yCost = (int)(Mathf.Clamp(currentNode.position.y - neighbor.position.y, 0, 10) * 4);
                         else
                             neighbor.yCost = 0;
+
                         neighbor.parent = currentNode;
 
-                        if (!neighbor.walkable)
-                            currentNode.wCost += 2;
-
-                        if (!openList.Contains(neighbor) && neighbor.yCost < maxIncline)
+                        if (!openList.Contains(neighbor))
                             openList.Add(neighbor);
                         else
                             openList.UpdateItem(neighbor);
@@ -86,6 +91,9 @@ public class Astar : MonoBehaviour
             }
         }
 
+        yield return null;
+
+        sw.Stop();
         if (success)
         {
             waypoints = TracePath(start_node, target_node);
@@ -93,9 +101,9 @@ public class Astar : MonoBehaviour
         }
         else
         {
-            sw.Stop();
             UnityEngine.Debug.Log($"No path found after {sw.ElapsedMilliseconds}ms");
         }
+        
         callback(new PathResult(waypoints, success, request.callback));
     }
 
@@ -126,13 +134,13 @@ public class Astar : MonoBehaviour
             Vector2 directionNew = new Vector2(path[i - 1].gridX - path[i].gridX, path[i - 1].gridY - path[i].gridY);
             if (directionNew != directionOld)
             {
-                waypoints.Add(path[i].position);
+                waypoints.Add(path[i -1].position);
             }
             else
             {
                 if (waypoints.Count > 0)
                 {
-                    if (waypoints[waypoints.Count-1].y - path[i].position.y > heightTollerence || waypoints[waypoints.Count - 1].y - path[i].position.y < -heightTollerence)
+                    if (path[i - 1].position.y - path[i].position.y > minHeightDifference || path[i - 1].position.y - path[i].position.y < -minHeightDifference)
                     {
                         waypoints.Add(path[i].position);
                     }
@@ -144,7 +152,7 @@ public class Astar : MonoBehaviour
         return waypoints.ToArray();
     }
 
-    List<Node> GetNeighbors(Node[,] grid, Node node)
+    public static List<Node> GetNeighbors(Node[,] grid, Node node)
     {
         List<Node> neighbors = new List<Node>();
         int xPos = node.gridX;
@@ -158,6 +166,23 @@ public class Astar : MonoBehaviour
                 if (x+xPos < grid.GetLength(0) && y+yPos < grid.GetLength(0) && x+xPos > -1 && y+yPos > -1) { neighbors.Add(grid[x+xPos,y+yPos]); }
             }
         }
+
+        return neighbors;
+    }
+    public static List<Node> GetDirectNeighbors(Node[,] grid, Node node)
+    {
+        List<Node> neighbors = new List<Node>();
+        int xPos = node.gridX;
+        int yPos = node.gridY;
+
+        if (xPos + 1 < AstarGrid.Instance.sampleSize && yPos + 1 < AstarGrid.Instance.sampleSize)
+            neighbors.Add(grid[xPos + 1, yPos + 1]);
+        if (0 <= xPos - 1 && 0 <= yPos - 1)
+            neighbors.Add(grid[xPos - 1, yPos - 1]);
+        if (xPos + 1 < AstarGrid.Instance.sampleSize && yPos - 1 >= 0)
+            neighbors.Add(grid[xPos + 1, yPos - 1]);
+        if (0 <= xPos - 1 && yPos + 1 < AstarGrid.Instance.sampleSize)
+            neighbors.Add(grid[xPos - 1, yPos + 1]);
 
         return neighbors;
     }

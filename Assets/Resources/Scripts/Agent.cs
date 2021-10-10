@@ -1,14 +1,14 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 public class Agent : MonoBehaviour
 {
-    public AstarGrid astar;
+    public AstarGrid astarGrid;
     public new Rigidbody rigidbody;
     public Transform rotationHost;
-    public float maxGridDistance = 3;
+    public bool showGizmos = false;
     [Header("Follow Settings")]
     public Transform target;
+    public float maxGridDistance = 3;
     public float pathUpdateTime = 0.5f;
     public bool targetPlayer = false;
     public float maxIncline = 2;
@@ -29,11 +29,21 @@ public class Agent : MonoBehaviour
     public string runAnimationName = "Run";
     public string attackAnimationName = "Attack";
 
-    // Private
+    [Header("Output")]
+    public float noPathPenaltySeconds = 1f;
     public bool isRunning = false;
+    public float stuckTimer = 0;
     public Vector3[] path;
+
+    // Private
     float speed = 0;
     Node closestNode;
+    Vector3 stuckPosition = Vector3.zero;
+    Vector3 direction;
+    Vector3 lookDirection;
+
+    // Timers
+    float timer = 0;
 
     public enum States
     {
@@ -46,14 +56,16 @@ public class Agent : MonoBehaviour
 
     private void Start()
     {
-        if (!astar)
-            astar = AstarGrid.Instance;
+        if (!astarGrid)
+            astarGrid = AstarGrid.Instance;
         if (targetPlayer)
-            target = astar.target;
+            target = astarGrid.target;
     }
 
-    public void OnPathFound(Vector3[] newPath, bool success)
+    bool isUpdatingPath = false;
+    public void OnPathResult(Vector3[] newPath, bool success)
     {
+        isUpdatingPath = false;
         if (success)
         {
             path = newPath;
@@ -61,35 +73,34 @@ public class Agent : MonoBehaviour
         else
         {
             path = null;
-            timer += 2.5f;
+            timer += noPathPenaltySeconds;
         }
     }
 
     //*
-    float timer = 0;
-    public float stuckTimer = 0;
-    Vector3 stuckPosition = Vector3.zero;
-    Vector3 direction;
-    Vector3 lookDirection;
     private void Update()
     {
         if (!target) return;
 
         speed = 0;
 
-        timer -= Time.deltaTime;
+        if (!isUpdatingPath)
+            timer -= Time.deltaTime;
         if (timer <= 0)
         {
             timer = pathUpdateTime;
-            if (AstarGrid.Instance.nodeGrid != null)
-                PathRequestManager.RequestPath(new PathRequest(AstarGrid.Instance.nodeGrid, transform.position, target.position, OnPathFound));
+            if (astarGrid.nodeGrid != null)
+            {
+                isUpdatingPath = true;
+                PathRequestManager.RequestPath(new PathRequest(astarGrid, transform.position, target.position, OnPathResult));
+            }
         }
 
-        if (Vector3.Distance(transform.position, astar.transform.position) < astar.gridSize + astar.gridSize / 2) // if we're not to far from the grid
+        if (Vector3.Distance(transform.position, astarGrid.transform.position) < astarGrid.gridSize) // if we're not too far from the grid
         {
             if (closestNode == null || Vector3.Distance(closestNode.position, transform.position) > maxGridDistance) // and we're too far from the closest node
             {
-                closestNode = AstarGrid.Instance.NodeFromWorldPoint(transform.position);
+                closestNode = astarGrid.NodeFromWorldPoint(transform.position);
 
                 if (closestNode == null)
                 {
@@ -122,10 +133,7 @@ public class Agent : MonoBehaviour
             if (Vector3.Distance(transform.position, target.position) >= stopDistance)
             {
                 direction = path[0] - transform.position;
-                if (path.Length > 4)
-                    lookDirection = path[0] - transform.position;
-                else if (target)
-                    lookDirection = target.position - transform.position;
+                lookDirection = path[0] - transform.position;
             }
             else
                 speed = 0;
@@ -206,12 +214,12 @@ public class Agent : MonoBehaviour
 
     public void OnDrawGizmos()
     {
-        if (path != null)
+        if (path != null && showGizmos)
         {
             for (int i = 1; i < path.Length; i++)
             {
                 Gizmos.color = Color.black;
-                Gizmos.DrawCube(path[i], Vector3.one);
+                Gizmos.DrawCube(path[i], Vector3.one * 0.55f);
 
                 if (i < 2)
                     Gizmos.DrawLine(transform.position, path[1]);

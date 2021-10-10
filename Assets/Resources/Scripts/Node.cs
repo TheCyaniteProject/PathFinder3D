@@ -7,7 +7,7 @@ public class Node : IHeapItem<Node>
     public Vector3 position;
     public int gridX;
     public int gridY;
-    public bool walkable = true; // if the spherecheck has not hit an obsticle
+    public bool walkable = false; // if the spherecheck has not hit an obsticle
     public bool grounded = false; // if the raycast has hit terrain;
 
     public int gCost = 0; // cost to next node
@@ -34,6 +34,16 @@ public class Node : IHeapItem<Node>
         {
             heapIndex = value;
         }
+    }
+
+    public void Reset()
+    {
+        gCost = 0;
+        hCost = 0;
+        wCost = 0;
+        yCost = 0;
+        walkable = false;
+        grounded = false;
     }
 
     public int CompareTo(Node node)
