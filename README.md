@@ -1,3 +1,5 @@
+PLEASE stop using this. It's a laggy, spaghetti mess, and if you use it you're a terrible person. I'm only leaving it public so existing projects that use it can be fixed/reset. Eventually I will cast it into the void, but until then, pretend you never saw this repo.
+
 # PathFinder3D
 3D A* Pathfinding that doesn't need baked navmeshes and can be used with dynamically created terrain (MapMagic or other)
 
